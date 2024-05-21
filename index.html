@@ -41,12 +41,23 @@
         }
         .output {
             margin-top: 20px;
+            display: flex;
+            overflow-x: auto;
         }
         .output img {
             display: block;
-            margin: 10px auto;
+            margin: 10px;
             max-width: 100px;
             max-height: 100px;
+            position: relative;
+        }
+        .thumbnail-container {
+            position: relative;
+        }
+        .thumbnail-container input {
+            position: absolute;
+            top: 5px;
+            left: 5px;
         }
         .download-button {
             display: inline-block;
@@ -61,6 +72,13 @@
         .download-button:hover {
             background-color: darkblue;
         }
+        @media (max-width: 600px) {
+            #drop-zone {
+                width: calc(100vw - 20rem);
+                height: calc(50vh);
+                margin: 0 10rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -69,12 +87,15 @@
         <input type="file" id="file-input" accept="application/pdf" class="hidden">
         <div id="drop-zone">Drag and drop a PDF file or click to select a file</div>
         <div class="output" id="output"></div>
+        <button id="download-selected" class="download-button hidden">Download Selected</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
     <script>
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const output = document.getElementById('output');
+        const downloadSelectedButton = document.getElementById('download-selected');
 
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (event) => {
@@ -125,7 +146,14 @@
                     const img = document.createElement('img');
                     img.src = canvas.toDataURL('image/png');
                     img.alt = `Page ${pageNum}`;
-                    output.appendChild(img);
+                    const thumbnailContainer = document.createElement('div');
+                    thumbnailContainer.className = 'thumbnail-container';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = `${fileName}_page_${pageNum}.png`;
+                    thumbnailContainer.appendChild(checkbox);
+                    thumbnailContainer.appendChild(img);
+                    output.appendChild(thumbnailContainer);
 
                     const imgData = canvas.toDataURL('image/png').split(',')[1];
                     if (pdfDoc.numPages === 1) {
@@ -143,19 +171,27 @@
                     downloadLink.className = 'download-button';
                     output.appendChild(downloadLink);
                 } else {
-                    const content = await zip.generateAsync({type: 'blob'});
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = URL.createObjectURL(content);
-                    downloadLink.download = `${fileName}_pages.zip`;
-                    downloadLink.textContent = 'Download PNGs as ZIP';
-                    downloadLink.className = 'download-button';
-                    output.appendChild(downloadLink);
+                    downloadSelectedButton.classList.remove('hidden');
+                    downloadSelectedButton.addEventListener('click', async () => {
+                        const selectedFiles = Array.from(document.querySelectorAll('.thumbnail-container input:checked'))
+                            .map(checkbox => checkbox.value);
+                        if (selectedFiles.length > 0) {
+                            const selectedZip = new JSZip();
+                            for (let file of selectedFiles) {
+                                selectedZip.file(file, zip.file(file).async('base64'), {base64: true});
+                            }
+                            const content = await selectedZip.generateAsync({type: 'blob'});
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = URL.createObjectURL(content);
+                            downloadLink.download = `${fileName}_selected_pages.zip`;
+                            downloadLink.click();
+                        }
+                    });
                 }
             };
 
             fileReader.readAsArrayBuffer(file);
         }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
 </body>
 </html>
