@@ -45,6 +45,8 @@
         .output img {
             display: block;
             margin: 10px auto;
+            max-width: 100px;
+            max-height: 100px;
         }
         .download-button {
             display: inline-block;
@@ -102,11 +104,15 @@
 
         async function processFile(file) {
             const fileReader = new FileReader();
+            const fileName = file.name.replace(/\.[^/.]+$/, "");
+
             fileReader.onload = async function () {
                 const arrayBuffer = this.result;
                 const pdfDoc = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
                 output.innerHTML = '';
                 const zip = new JSZip();
+                let singleImage;
+
                 for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                     const page = await pdfDoc.getPage(pageNum);
                     const viewport = page.getViewport({scale: 1.5});
@@ -122,16 +128,31 @@
                     output.appendChild(img);
 
                     const imgData = canvas.toDataURL('image/png').split(',')[1];
-                    zip.file(`page_${pageNum}.png`, imgData, {base64: true});
+                    if (pdfDoc.numPages === 1) {
+                        singleImage = imgData;
+                    } else {
+                        zip.file(`${fileName}_page_${pageNum}.png`, imgData, {base64: true});
+                    }
                 }
-                const content = await zip.generateAsync({type: 'blob'});
-                const downloadLink = document.createElement('a');
-                downloadLink.href = URL.createObjectURL(content);
-                downloadLink.download = 'pdf_pages.zip';
-                downloadLink.textContent = 'Download PNGs as ZIP';
-                downloadLink.className = 'download-button';
-                output.appendChild(downloadLink);
+
+                if (pdfDoc.numPages === 1) {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = `data:image/png;base64,${singleImage}`;
+                    downloadLink.download = `${fileName}.png`;
+                    downloadLink.textContent = 'Download PNG';
+                    downloadLink.className = 'download-button';
+                    output.appendChild(downloadLink);
+                } else {
+                    const content = await zip.generateAsync({type: 'blob'});
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = `${fileName}_pages.zip`;
+                    downloadLink.textContent = 'Download PNGs as ZIP';
+                    downloadLink.className = 'download-button';
+                    output.appendChild(downloadLink);
+                }
             };
+
             fileReader.readAsArrayBuffer(file);
         }
     </script>
